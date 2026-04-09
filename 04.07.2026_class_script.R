@@ -50,12 +50,42 @@ lat_bounds = c(39, 53)
 # coastline data
 world_map = map_data("worldHires", ylim = lat_bounds, xlim = lon_bounds)
 
-# plot critical habitats adn carcass locations
+# plot critical habitats and carcass locations
 crit_map = ggplot() + 
   geom_polygon(data = world_map, aes(x = long, y = lat, group = group), fill = "black") +
   geom_sf(data = crit_hab, alpha = 0.5, aes(fill = country)) + 
   geom_point(data = carcass, aes(x = Longitude, y = Latitude, color = Carcass_position), size = 2) +
-  coord_sf(1.3, xlim = lon_bounds, ylim = lat_bounds) + 
+  coord_sf(xlim = lon_bounds, ylim = lat_bounds) + 
   labs(y = "Latitude", x = "Longitude") + 
   theme_bw()
 crit_map
+
+# install.packages("ggnewscale")
+library(ggnewscale)
+
+bath_m_raw = marmap::getNOAA.bathy(lon1 = lon_bounds[1]-2,
+                                    lon2 = lon_bounds[2]+2,
+                                    lat1 = lat_bounds[1]-2,
+                                    lat2 = lat_bounds[2]+2,
+                                    resolution = 4)
+
+# convert bathymetry to data frame
+bath_m_fortify = marmap::fortify.bathy(bath_m_raw)
+bath_m = bath_m_fortify %>%
+  mutate(depth_m = ifelse(z>0, NA, z)) %>%
+  dplyr::select(-z)
+
+# plot critical habitats and carcass locations over bathymetry
+rw_map = ggplot() +
+  geom_raster(data = bath_m, aes(x = x, y = y, fill = depth_m), alpha = 0.75) +
+  scale_fill_gradientn(colors = c("black", "navy", "blue4", "lightblue"),
+                        values = scales::rescale(c(-5000, -3000, -300, 0)),
+                        name = "Depth (m)") + 
+  geom_polygon(data = world_map, aes(x = long, y = lat, group = group), fill = "black", color = NA) +
+  geom_sf(data = crit_hab, alpha = 0.5, fill = "yellow") + 
+  geom_point(data = carcass, aes(x = Longitude, y = Latitude, color = Carcass_position), size = 2) +
+  coord_sf(xlim = lon_bounds, ylim = lat_bounds) +
+  labs(y = "Latitude", x = "Longitude") +
+  theme_bw()
+rw_map
+ggsave(rw_map, filename = 'figures/rw_habitats.png', device = "png", height = 5, width = 7)
